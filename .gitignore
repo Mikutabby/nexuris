@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# venv
+.venv/
+venv/
+
+# datos locales (memoria, bloques) — no se suben
+nexuris/data/
+*.db
+*.db-wal
+*.db-shm
+blocks.json
+
+# secrets — NUNCA
+.env
+*.key
+*.token
+
+# editor
+.vscode/
+.idea/
+*.swp
