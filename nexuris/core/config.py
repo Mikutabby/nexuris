@@ -89,7 +89,7 @@ class Config:
     agent: AgentConfig = field(default_factory=AgentConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     user_name: str = "miku"
-    assistant_name: str = "Nexo"
+    assistant_name: str = "Nexuris"
 
 
 CONFIG = Config()

@@ -53,7 +53,7 @@ def _compose_system_prompt(extra: str | None = None) -> str:
       - La personalidad emerge de la convergencia natural + memoria, no del prompt.
     """
     role = (
-        "Sos Nexo, el asistente del hogar de miku. "
+        "Tu nombre es Nexuris, la evolución de Nexo. Sos el asistente del hogar de miku. "
         "Respondés en español. Usás las herramientas disponibles para ayudar "
         "con el sistema, archivos, memoria y tareas del hogar."
     )
