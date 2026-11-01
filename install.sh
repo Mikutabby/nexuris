@@ -56,6 +56,8 @@ Opciones:
   --install-deps    instala paquetes del sistema sin preguntar (usa sudo)
   -y, --yes         responde "sí" a todas las preguntas
   --check           solo diagnostica; no modifica nada
+  --update          actualiza repo, dependencias, modelo y tests
+  --check-update    informa qué hay para actualizar (no cambia nada)
   --uninstall       desinstala (deja los datos de memoria salvo --purge)
   --purge           con --uninstall: borra también los datos de memoria
   -h, --help        esta ayuda
@@ -301,10 +303,12 @@ smoke_test() {
   if "$VENV_DIR/bin/python" "$REPO_DIR/tests/test_learning.py" >/dev/null 2>&1; then ok "test de aprendizaje"
   else err "test de aprendizaje falló"; return 1; fi
 
-  if [ -f "$REPO_DIR/tests/test_install.py" ]; then
-    if "$VENV_DIR/bin/python" "$REPO_DIR/tests/test_install.py" >/dev/null 2>&1; then ok "test de instalación"
-    else err "test de instalación falló"; return 1; fi
-  fi
+  for t in test_install.py test_update.py; do
+    if [ -f "$REPO_DIR/tests/$t" ]; then
+      if "$VENV_DIR/bin/python" "$REPO_DIR/tests/$t" >/dev/null 2>&1; then ok "test $t"
+      else err "test $t falló"; return 1; fi
+    fi
+  done
   return 0
 }
 
@@ -401,6 +405,8 @@ while [ $# -gt 0 ]; do
     --install-deps) DEPS=1; shift ;;
     -y|--yes) ASSUME_YES=1; shift ;;
     --check) MODE="check"; shift ;;
+    --update) MODE="update"; shift ;;
+    --check-update) MODE="update-check"; shift ;;
     --uninstall) MODE="uninstall"; shift ;;
     --purge) PURGE=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -418,6 +424,18 @@ case "$MODE" in
     ;;
   uninstall)
     uninstall_all; exit 0
+    ;;
+  update|update-check)
+    if [ ! -x "$VENV_DIR/bin/nexuris" ]; then
+      [ "$MODE" = "update-check" ] && die "Nexuris no está instalado en $VENV_DIR (corré ./install.sh)"
+      warn "Nexuris no está instalado todavía: hago la instalación completa"
+      MODE="install"
+    else
+      if [ "$MODE" = "update-check" ]; then
+        exec "$VENV_DIR/bin/nexuris" update --check
+      fi
+      exec "$VENV_DIR/bin/nexuris" update
+    fi
     ;;
 esac
 

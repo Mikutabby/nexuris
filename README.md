@@ -103,12 +103,44 @@ Todo por variables de entorno — no hay que editar código:
 | Variable | Para qué | Default |
 |---|---|---|
 | `OPENROUTER_API_KEY` (o `NEXO_OPENROUTER_KEY`) | API key del cerebro | se lee de `~/.config/opencode/opencode.jsonc` |
-| `NEXURIS_MODEL` | modelo de OpenRouter | `openrouter/free` |
+| `NEXURIS_MODEL` | modelo de OpenRouter (pisa la config guardada) | `openrouter/free` |
 | `NEXURIS_DATA_DIR` | dónde vive la memoria | `~/.local/share/nexuris` (o `nexuris/data` si ya había datos) |
 | `NEXURIS_VENV` | ruta del virtualenv | `./.venv` |
 
 Si el modelo configurado desaparece de OpenRouter, el cliente cae solo a
-`openrouter/free` en vez de romperse.
+`openrouter/free` en vez de romperse. La elección del modelo también se guarda
+en `~/.config/nexuris/config.json` (comando `/modelo` o `nexuris update`).
+
+## Mantenimiento
+
+Nexuris se mantiene al día con las IAs actuales con un comando:
+
+```bash
+nexuris update            # actualiza todo
+nexuris update --check    # solo muestra qué hay para actualizar
+```
+
+O desde el instalador:
+
+```bash
+./install.sh --update
+./install.sh --check-update
+```
+
+`nexuris update` hace, en orden:
+
+1. **Repo**: `git pull --ff-only` si el checkout está limpio (nunca pisa cambios locales).
+2. **Dependencias**: reinstala el paquete en modo editable.
+3. **Modelo**: consulta OpenRouter, filtra modelos **gratis con tool calling**,
+   los ordena por contexto y proveedor, y valida al ganador con una llamada real
+   (tiene que saber usar una tool). Si ninguno responde, usa `openrouter/free`.
+   El elegido queda en `~/.config/nexuris/config.json`.
+4. **Tests**: corre los tests offline; si algo falla, avisa.
+
+Flags: `--no-pull`, `--no-model`, `--no-tests`.
+
+La idea es que cuando salgan modelos nuevos (o retiren los viejos), un
+`nexuris update` alcance para quedar al día sin tocar código.
 
 ## Modos de uso
 
@@ -147,6 +179,7 @@ El agente de opencode (`.opencode/agents/nexuris.md`) queda disponible como modo
 
 ```bash
 ./.venv/bin/python tests/test_install.py    # offline, sirve para verificar la instalación
+./.venv/bin/python tests/test_update.py     # offline, actualizador y ranking de modelos
 ./.venv/bin/python tests/test_learning.py   # offline
 ./.venv/bin/python tests/test_loop.py       # end-to-end (necesita API key)
 ./.venv/bin/python tests/test_cycle.py      # ciclo de memoria (necesita API key)

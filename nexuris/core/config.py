@@ -1,6 +1,7 @@
 """Nexo 2.0 — Configuración central."""
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -63,6 +64,43 @@ DATA_DIR = _resolve_data_dir()
 # Modelo al que se cae si el configurado ya no existe en OpenRouter
 FALLBACK_MODEL = "openrouter/free"
 
+# Config persistente del usuario (no secretos: solo preferencias)
+CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")) / "nexuris"
+USER_CONFIG_PATH = CONFIG_DIR / "config.json"
+
+
+def load_user_config() -> dict:
+    """Lee ~/.config/nexuris/config.json (vacío si no existe o está roto)."""
+    try:
+        data = json.loads(USER_CONFIG_PATH.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_user_config(**updates) -> Path:
+    """Guarda claves en la config persistente de forma atómica."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    data = load_user_config()
+    for key, value in updates.items():
+        if value is not None:
+            data[key] = value
+    tmp = USER_CONFIG_PATH.with_name(USER_CONFIG_PATH.name + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    tmp.replace(USER_CONFIG_PATH)
+    return USER_CONFIG_PATH
+
+
+def _load_model() -> str:
+    """Env > config.json > router gratuito."""
+    env = os.environ.get("NEXURIS_MODEL") or os.environ.get("NEXO_MODEL")
+    if env and env.strip():
+        return env.strip()
+    saved = load_user_config().get("model")
+    if isinstance(saved, str) and saved.strip():
+        return saved.strip()
+    return FALLBACK_MODEL
+
 # Ruta al opencode.jsonc actual para extraer la API key de OpenRouter
 # (sin imprimirla jamás)
 _OPENCODE_CONFIG = Path.home() / ".config" / "opencode" / "opencode.jsonc"
@@ -113,11 +151,7 @@ class LLMConfig:
     #   "anthropic/claude-opus-5.5"    (tope)
     # Default durable: el router gratuito de OpenRouter (soporta tools).
     # Cambialo con NEXURIS_MODEL o NEXO_MODEL sin tocar código.
-    model: str = field(
-        default_factory=lambda: os.environ.get("NEXURIS_MODEL")
-        or os.environ.get("NEXO_MODEL")
-        or FALLBACK_MODEL
-    )
+    model: str = field(default_factory=_load_model)
     max_tokens: int = 4096
     temperature: float = 0.7
     api_key: str | None = field(default=None, repr=False)

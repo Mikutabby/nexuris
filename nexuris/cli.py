@@ -6,7 +6,11 @@ Charlá con Nexo desde la terminal. Comandos:
   /bloques   muestra los bloques de memoria
   /hechos    muestra los últimos hechos guardados
   /ayuda     muestra esta ayuda
-  /modelo    cambia el modelo (string de OpenRouter)
+  /modelo    cambia el modelo (string de OpenRouter) y lo recuerda
+
+Fuera de la charla:
+  nexuris update        actualiza repo, dependencias, modelo y tests
+  nexuris update --check   solo muestra qué hay para actualizar
 """
 from __future__ import annotations
 
@@ -17,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from nexuris.bootstrap import build_agent
-from nexuris.core.config import CONFIG
+from nexuris.core.config import CONFIG, save_user_config
 from nexuris.learn.feedback import FeedbackKind
 from nexuris.memory.blocks import BLOCKS, BlockLabel
 from nexuris.memory.store import STORE
@@ -42,6 +46,15 @@ def _print_facts() -> None:
 
 
 def main() -> None:
+    argv = sys.argv[1:]
+    if argv and argv[0] in ("update", "actualizar"):
+        from nexuris.update import cli as update_cli
+
+        raise SystemExit(update_cli(argv[1:]))
+    if argv and argv[0] in ("-h", "--help", "help"):
+        print(__doc__)
+        return
+
     print("=" * 55)
     print("  NEXO 2.0 — aprendizaje sin guion")
     print(f"  cerebro: {CONFIG.llm.model}")
@@ -105,7 +118,8 @@ def main() -> None:
                 if arg:
                     CONFIG.llm.model = arg
                     agent.llm.config.model = arg
-                    print(f"  Modelo cambiado a: {arg}")
+                    save_user_config(model=arg)
+                    print(f"  Modelo cambiado a: {arg} (guardado en config)")
                 else:
                     print(f"  Modelo actual: {CONFIG.llm.model}")
             elif cmd == "/ayuda":
