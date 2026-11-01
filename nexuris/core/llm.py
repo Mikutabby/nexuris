@@ -10,7 +10,7 @@ from typing import Any
 
 from openai import OpenAI
 
-from .config import CONFIG, LLMConfig
+from .config import CONFIG, FALLBACK_MODEL, LLMConfig
 
 
 @dataclass
@@ -47,6 +47,12 @@ class LLMClient:
             api_key=self.config.api_key,
         )
 
+    @staticmethod
+    def _model_missing(exc: Exception) -> bool:
+        status = getattr(exc, "status_code", None)
+        msg = str(exc).lower()
+        return status in (400, 404) and ("model" in msg or "slug" in msg)
+
     def chat(
         self,
         messages: list[dict[str, Any]],
@@ -63,7 +69,17 @@ class LLMClient:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
 
-        resp = self._client.chat.completions.create(**kwargs)
+        try:
+            resp = self._client.chat.completions.create(**kwargs)
+        except Exception as exc:  # noqa: BLE001
+            # OpenRouter retira slugs de modelos: si el configurado murió,
+            # caemos al router gratuito una sola vez y lo dejamos fijado.
+            if not self._model_missing(exc) or self.config.model == FALLBACK_MODEL:
+                raise
+            self.config.model = FALLBACK_MODEL
+            kwargs["model"] = FALLBACK_MODEL
+            resp = self._client.chat.completions.create(**kwargs)
+
         choice = resp.choices[0]
         msg = choice.message
 

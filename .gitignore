@@ -21,6 +21,10 @@ blocks.json
 *.key
 *.token
 
+# backups locales
+*.bak
+*.bak-*
+
 # editor
 .vscode/
 .idea/

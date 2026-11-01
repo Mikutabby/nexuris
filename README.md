@@ -37,51 +37,131 @@ nexuris/
 └── mcp_server.py      # servidor MCP (para opencode u otro cliente)
 ```
 
-## Modos de uso
+## Instalación
 
-### 1. CLI standalone (fuera de opencode)
+### Un comando (recomendado)
 
 ```bash
+git clone https://github.com/Mikutabby/nexuris.git
 cd nexuris
-./.venv/bin/python run.py
+./install.sh
+```
+
+El instalador detecta la distro y el gestor de paquetes, verifica Python ≥ 3.10
+y el módulo `venv`, crea `.venv`, instala el paquete en modo editable, corre un
+smoke test, deja los lanzadores `nexuris` / `nexuris-mcp` en `~/.local/bin` y
+registra el MCP en opencode con la ruta real de tu máquina.
+
+Si falta Python o `python3-venv`, te muestra el comando exacto y **pregunta**
+antes de usar `sudo`. También podés dejarlo hacerlo solo:
+
+```bash
+./install.sh --install-deps -y
+```
+
+### Por distro (si preferís a mano)
+
+| Distro | Paquetes |
+|---|---|
+| Arch / Manjaro / EndeavourOS / CachyOS | `sudo pacman -S --needed python python-pip` |
+| Debian / Ubuntu / Mint / Pop!_OS / Kali | `sudo apt install python3 python3-venv python3-pip` |
+| Fedora / RHEL / Rocky / Alma | `sudo dnf install python3 python3-pip` |
+| openSUSE / SLES | `sudo zypper install python3 python3-pip` |
+| Alpine | `sudo apk add python3 py3-pip` |
+| Void | `sudo xbps-install -S python3 python3-pip` |
+| Gentoo | `sudo emerge dev-lang/python dev-python/pip` |
+| Solus | `sudo eopkg install python3 python3-pip` |
+| Termux (Android) | `pkg install python` |
+| NixOS | `nix-shell -p python3 --run './install.sh'` o agregá `pkgs.python3` a `environment.systemPackages` |
+
+Después, en cualquier distro:
+
+```bash
+git clone https://github.com/Mikutabby/nexuris.git
+cd nexuris
+python3 -m venv .venv
+./.venv/bin/pip install -e .
+./.venv/bin/nexuris              # CLI
+```
+
+### Opciones del instalador
+
+```bash
+./install.sh --check          # diagnostica sin tocar nada
+./install.sh --no-mcp         # no toca la config de opencode
+./install.sh --no-link        # no crea lanzadores en ~/.local/bin
+./install.sh --venv /ruta     # virtualenv en otra ruta
+./install.sh --recreate       # borra y recrea el venv
+./install.sh --uninstall      # quita venv, lanzadores y MCP
+./install.sh --uninstall --purge   # además borra la memoria
+```
+
+## Configuración
+
+Todo por variables de entorno — no hay que editar código:
+
+| Variable | Para qué | Default |
+|---|---|---|
+| `OPENROUTER_API_KEY` (o `NEXO_OPENROUTER_KEY`) | API key del cerebro | se lee de `~/.config/opencode/opencode.jsonc` |
+| `NEXURIS_MODEL` | modelo de OpenRouter | `openrouter/free` |
+| `NEXURIS_DATA_DIR` | dónde vive la memoria | `~/.local/share/nexuris` (o `nexuris/data` si ya había datos) |
+| `NEXURIS_VENV` | ruta del virtualenv | `./.venv` |
+
+Si el modelo configurado desaparece de OpenRouter, el cliente cae solo a
+`openrouter/free` en vez de romperse.
+
+## Modos de uso
+
+### 1. CLI standalone
+
+```bash
+nexuris            # o ./.venv/bin/python run.py
 ```
 
 Comandos: `/salir` (consolida), `/feedback bien|mal`, `/bloques`, `/hechos`, `/modelo <id>`.
 
 ### 2. Dentro de opencode (vía MCP)
 
-Registrar en `~/.config/opencode/opencode.jsonc`:
+El instalador ya lo registra. Si querés hacerlo a mano, el bloque en
+`~/.config/opencode/opencode.jsonc` es:
 
-```json
+```jsonc
 "mcp": {
   "nexuris": {
     "type": "local",
-    "command": ["/home/archlinux/nexuris/.venv/bin/python", "-m", "nexuris.mcp_server"],
+    "command": ["/RUTA/A/TU/nexuris/.venv/bin/python", "-m", "nexuris.mcp_server"],
     "enabled": true
   }
 }
 ```
 
+O automático con la ruta correcta:
+
+```bash
+python3 scripts/register_mcp.py --python "$PWD/.venv/bin/python"
+```
+
 El agente de opencode (`.opencode/agents/nexuris.md`) queda disponible como modo `nexuris`.
+
+### 3. Tests
+
+```bash
+./.venv/bin/python tests/test_install.py    # offline, sirve para verificar la instalación
+./.venv/bin/python tests/test_learning.py   # offline
+./.venv/bin/python tests/test_loop.py       # end-to-end (necesita API key)
+./.venv/bin/python tests/test_cycle.py      # ciclo de memoria (necesita API key)
+```
 
 ## Cerebro (LLM)
 
-Un solo cerebro, configurable. Por defecto un modelo gratis de OpenRouter que soporta tool calling. Para cambiar a Claude:
-
-```python
-# nexuris/core/config.py
-model: str = "anthropic/claude-sonnet-5.5"
-```
-
-La API key se lee de `NEXO_OPENROUTER_KEY` / `OPENROUTER_API_KEY` o del config de opencode.
-
-## Instalación
+Un solo cerebro, configurable. Por defecto `openrouter/free`, que soporta tool
+calling y no se cae cuando retiran un slug. Para usar Claude:
 
 ```bash
-python3 -m venv .venv
-./.venv/bin/pip install openai httpx
-./.venv/bin/python tests/test_learning.py   # smoke test
+NEXURIS_MODEL=anthropic/claude-sonnet-5.5 nexuris
 ```
+
+La API key se lee de `OPENROUTER_API_KEY`, `NEXO_OPENROUTER_KEY` o del config de opencode.
 
 ## Licencia
 

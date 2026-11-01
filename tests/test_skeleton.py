@@ -30,9 +30,9 @@ def main() -> None:
     print(info)
 
     # 4. Probar memoria
-    print("\n-- probando remember/recall --")
-    REGISTRY.invoke("remember", {"fact": "miku prefiere Claude como cerebro de Nexo 2.0"})
-    hits = REGISTRY.invoke("recall", {"query": "cerebro"})
+    print("\n-- probando remember_fact/recall_facts --")
+    REGISTRY.invoke("remember_fact", {"fact": "miku prefiere Claude como cerebro de Nexo 2.0"})
+    hits = REGISTRY.invoke("recall_facts", {"query": "cerebro"})
     print("recall('cerebro') ->", hits)
 
     print("\n✅ Esqueleto OK. Loop LLM se prueba aparte con API key.")

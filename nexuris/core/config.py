@@ -5,10 +5,63 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Base del proyecto
+# Base del proyecto (directorio del paquete)
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
-DATA_DIR.mkdir(exist_ok=True)
+# Raíz del repo (donde está pyproject.toml) — para compatibilidad de datos viejos
+REPO_DIR = BASE_DIR.parent
+
+
+def _writable(path: Path) -> bool:
+    """True si el directorio existe (o se puede crear) y se puede escribir."""
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        probe = path / ".write-test"
+        probe.touch()
+        probe.unlink()
+        return True
+    except OSError:
+        return False
+
+
+def _resolve_data_dir() -> Path:
+    """Dónde guardar la memoria (hechos, bloques, DB).
+
+    Orden:
+      1. $NEXURIS_DATA_DIR (o $NEXO_DATA_DIR) — override explícito.
+      2. Datos legacy dentro del repo (nexuris/data o data/) si ya existen,
+         para no perder memoria de instalaciones anteriores.
+      3. $XDG_DATA_HOME/nexuris (o ~/.local/share/nexuris) — lo correcto
+         cuando el paquete se instala fuera del repo, en cualquier distro.
+      4. Tempdir — último recurso si nada es escribible.
+    """
+    for var in ("NEXURIS_DATA_DIR", "NEXO_DATA_DIR"):
+        env = os.environ.get(var)
+        if env:
+            path = Path(env).expanduser()
+            if _writable(path):
+                return path
+            raise SystemExit(f"{var}={env} no es escribible")
+
+    for legacy in (BASE_DIR / "data", REPO_DIR / "data"):
+        if (legacy / "nexuris.db").exists() or (legacy / "blocks.json").exists():
+            return legacy
+
+    xdg = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    candidate = Path(xdg) / "nexuris"
+    if _writable(candidate):
+        return candidate
+
+    import tempfile
+
+    fallback = Path(tempfile.gettempdir()) / "nexuris"
+    fallback.mkdir(parents=True, exist_ok=True)
+    return fallback
+
+
+DATA_DIR = _resolve_data_dir()
+
+# Modelo al que se cae si el configurado ya no existe en OpenRouter
+FALLBACK_MODEL = "openrouter/free"
 
 # Ruta al opencode.jsonc actual para extraer la API key de OpenRouter
 # (sin imprimirla jamás)
@@ -21,7 +74,11 @@ def _load_openrouter_key() -> str | None:
     Nunca retorna ni imprime la key en logs. Solo la devuelve para
     que el cliente LLM la use en memoria.
     """
-    env = os.environ.get("NEXO_OPENROUTER_KEY") or os.environ.get("OPENROUTER_API_KEY")
+    env = (
+        os.environ.get("NEXURIS_OPENROUTER_KEY")
+        or os.environ.get("NEXO_OPENROUTER_KEY")
+        or os.environ.get("OPENROUTER_API_KEY")
+    )
     if env:
         return env
     try:
@@ -54,8 +111,13 @@ class LLMConfig:
     # Modelo actual. Cambiar a Claude cuando haya créditos en OpenRouter:
     #   "anthropic/claude-sonnet-5.5"  (mejor calidad/costo)
     #   "anthropic/claude-opus-5.5"    (tope)
-    # Gratis mientras tanto (soporta tools):
-    model: str = "nvidia/nemotron-3-super-120b-a12b:free"
+    # Default durable: el router gratuito de OpenRouter (soporta tools).
+    # Cambialo con NEXURIS_MODEL o NEXO_MODEL sin tocar código.
+    model: str = field(
+        default_factory=lambda: os.environ.get("NEXURIS_MODEL")
+        or os.environ.get("NEXO_MODEL")
+        or FALLBACK_MODEL
+    )
     max_tokens: int = 4096
     temperature: float = 0.7
     api_key: str | None = field(default=None, repr=False)

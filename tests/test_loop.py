@@ -9,10 +9,10 @@ from nexuris.core.config import CONFIG
 
 
 def main() -> None:
-    print("== Nexo 2.0 — test loop con Claude (aprendizaje) ==\n")
     if not CONFIG.llm.api_key:
-        print("❌ No hay API key de OpenRouter. Setea NEXO_OPENROUTER_KEY.")
-        sys.exit(1)
+        print("SKIP: sin API key de OpenRouter (exportá OPENROUTER_API_KEY)")
+        return
+    print("== Nexo 2.0 — test loop con Claude (aprendizaje) ==\n")
 
     print(f"Cerebro: {CONFIG.llm.model}")
     agent = build_agent()

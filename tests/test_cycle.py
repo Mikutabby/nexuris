@@ -5,12 +5,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from nexuris.bootstrap import build_agent
+from nexuris.core.config import CONFIG
 from nexuris.session import Session
 from nexuris.learn.feedback import FeedbackKind
 from nexuris.memory.blocks import BLOCKS, BlockLabel
 
 
 def main() -> None:
+    if not CONFIG.llm.api_key:
+        print("SKIP: sin API key de OpenRouter (exportá OPENROUTER_API_KEY)")
+        return
     print("== Nexo 2.0 — test ciclo de aprendizaje ==\n")
 
     agent = build_agent()

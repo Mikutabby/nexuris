@@ -34,6 +34,8 @@ Cuando necesités información o una acción, llamá la herramienta.
 
 ## Contexto del entorno
 
-- Home: `/home/archlinux`. Usuario del sistema: `archlinux`, alias: `miku`.
-- Escritorio X11. PC modesta (Celeron, 4GB RAM) — el LLM vive en la nube.
+- Home: `$HOME` del usuario actual (no está hardcodeado). Alias del usuario: `miku`.
+- Escritorio Linux (X11 o Wayland). La PC puede ser modesta — el LLM vive en la nube.
 - El cerebro de Nexuris (modo standalone) es un agente con loop propio.
+- Herramientas del sistema: usá las que existan en la distro actual (`pacman`, `apt`, `dnf`,
+  `zypper`, `apk`…), nunca asumas una sola.
