@@ -53,7 +53,7 @@ def record_feedback(event: FeedbackEvent) -> str:
 def recent_lessons(limit: int = 10) -> list[str]:
     """Últimas lecciones de feedback para inyectar en contexto."""
     hits = STORE.search("feedback", limit=limit * 2)
-    lessons = [h.content for h in hits if h.content.startswith("[feedback:")]
+    lessons = [h.content for h in hits if h.content.startswith("[feedback")]
     return lessons[:limit]
 
 
