@@ -50,6 +50,8 @@ class CloudSession:
             title=f"Nexuris CLI {datetime.now().strftime('%Y-%m-%d %H:%M')}"
         )
         self.history: list[dict[str, str]] = []
+        self.turns = 0
+        self.max_turns = 30
         self._pushed_state: tuple[str, str] | None = None  # (bloques, lecciones)
         self.pending_saved = False
         log.info("sesión opencode creada: %s (%s)", self.session_id, self.client.model)
@@ -79,8 +81,27 @@ class CloudSession:
 
     # ---- interfaz estándar ----
 
+    def _rotate_session(self) -> None:
+        """Session nueva cuando el contexto crece demasiado.
+
+        Las sesiones de opencode no compactan automáticamente en todos los
+        modelos; una charla larga puede llegar a cientos de miles de tokens
+        y `opencode run` supera su timeout. La memoria viaja igual porque se
+        reinyecta como instruction entries en la sesión nueva.
+        """
+        self.session_id = self.client.create_session(
+            title=f"Nexuris CLI {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        )
+        self._pushed_state = None
+        self.turns = 0
+        self.sync_memory(force=True)
+        log.info("sesión rotada por contexto: %s", self.session_id)
+
     def ask(self, user_input: str) -> str:
         """Un turno. Sincroniza memoria y delega en opencode."""
+        if self.turns >= self.max_turns:
+            self._rotate_session()
+        self.turns += 1
         try:
             self.sync_memory()
         except OpenCodeError as exc:
