@@ -103,6 +103,7 @@ python3 -m venv .venv
 
 ```bash
 ./install.sh --check          # diagnostica sin tocar nada
+./install.sh --codex          # instala y configura Codex con Nexuris
 ./install.sh --no-mcp         # no toca la config de opencode
 ./install.sh --no-link        # no crea lanzadores en ~/.local/bin
 ./install.sh --venv /ruta     # virtualenv en otra ruta
