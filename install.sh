@@ -21,6 +21,7 @@ MODE="install"
 LINK=1
 MCP=1
 AGENT=1
+CODEX=0
 FORCE_AGENT=0
 DEPS=0
 ASSUME_YES=0
@@ -52,6 +53,7 @@ Opciones:
   --no-mcp          no registra el servidor MCP en opencode
   --no-agent        no instala el agente de opencode
   --force-agent     sobrescribe el agente si ya existe (hace backup)
+  --codex           configura Codex para usar Nexuris (proxy :4205)
   --recreate        borra y recrea el virtualenv
   --install-deps    instala paquetes del sistema sin preguntar (usa sudo)
   -y, --yes         responde "sí" a todas las preguntas
@@ -366,6 +368,7 @@ register_mcp() {
 
 uninstall_all() {
   step "Desinstalando"
+  [ -f "$REPO_DIR/scripts/setup_codex.py" ] && python3 "$REPO_DIR/scripts/setup_codex.py" --remove 2>/dev/null || true
   DATA_DIR_RESOLVED="$(resolve_data_dir)"
   [ -d "$VENV_DIR" ] && rm -rf -- "$VENV_DIR" && ok "venv eliminado" || true
   local bindir="$HOME/.local/bin" name
@@ -401,6 +404,7 @@ while [ $# -gt 0 ]; do
     --no-mcp) MCP=0; shift ;;
     --no-agent) AGENT=0; shift ;;
     --force-agent) FORCE_AGENT=1; shift ;;
+    --codex) CODEX=1; shift ;;
     --recreate) RECREATE=1; shift ;;
     --install-deps) DEPS=1; shift ;;
     -y|--yes) ASSUME_YES=1; shift ;;
@@ -467,6 +471,10 @@ smoke_test || die "el smoke test falló — revisá los mensajes de arriba"
 link_launchers
 install_agent
 register_mcp
+if [ "$CODEX" -eq 1 ]; then
+  step "Configurando Codex para Nexuris"
+  python3 "$REPO_DIR/scripts/setup_codex.py" || die "la configuración de Codex falló"
+fi
 
 hr
 ok "Nexuris quedó instalado"
@@ -475,9 +483,10 @@ say "  CLI:      ${C_B}nexuris${C_RST}   (o $VENV_DIR/bin/nexuris)"
 say "  MCP:      ${C_B}nexuris-mcp${C_RST}  (registrado en opencode: $( [ "$MCP" -eq 1 ] && echo sí || echo no ))"
 say "  agente:   $( [ "$AGENT" -eq 1 ] && echo "instalado en ~/.config/opencode/agents" || echo "no instalado" )"
 say "  datos:    $(resolve_data_dir)"
-say "  modelo:   ${NEXURIS_MODEL:-openrouter/free}  (cambialo con NEXURIS_MODEL)"
+say "  modelo:   el de opencode (cambialo con /modelo dentro de nexuris)"
 say ""
 say "  Si 'nexuris' no aparece: export PATH=\"\$HOME/.local/bin:\$PATH\""
 say "  Configurar API key:      export OPENROUTER_API_KEY=sk-or-..."
+say "  Codex + Nexuris:         ./install.sh --codex"
 say "  Diagnóstico:             ./install.sh --check"
 hr
