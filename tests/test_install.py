@@ -43,7 +43,8 @@ def main() -> None:
 
     agent = build_agent()
     assert agent is not None
-    print(f"ok agente construido (modelo: {CONFIG.llm.model})")
+    llm_status = "configurado" if CONFIG.llm.api_key else "sin API key (modo sin LLM)"
+    print(f"ok agente construido (modelo: {CONFIG.llm.model}, LLM: {llm_status})")
 
     names = set(REGISTRY.names())
     missing = REQUIRED_TOOLS - names

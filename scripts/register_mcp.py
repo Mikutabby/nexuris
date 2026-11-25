@@ -184,36 +184,122 @@ def build_entry(indent: str, python_path: str) -> str:
     )
 
 
-def edit(text: str, python_path: str) -> str:
-    found = find_top_mcp(text, "mcp")
+def _resolve_servers_container(text: str) -> tuple[int, int]:
+    """Devuelve (start,end) del objeto donde vive nexuris: mcp.servers (V2) o mcp (legacy)."""
     sc = Scanner(text)
-
+    found = find_top_mcp(text, "mcp")
     if found is None:
         raise ValueError('el config no tiene una sección "mcp"')
-
     mcp_start, mcp_end, _ = found
-    existing = find_key(sc, mcp_start, mcp_end, "nexuris")
+    servers = find_key(sc, mcp_start, mcp_end, "servers")
+    if servers and text[servers["val_start"]] == "{":
+        return servers["val_start"], sc.matching(servers["val_start"], len(text), "{", "}")
+    # si nexuris ya está directo en mcp, mantener compatibilidad legacy
+    if find_key(sc, mcp_start, mcp_end, "nexuris"):
+        return mcp_start, mcp_end
+    # V2 preferido: crear "servers" dentro de mcp si no existe
+    if servers is None:
+        members = sc.members(mcp_start, mcp_end)
+        if members:
+            base = line_indent(text, members[0]["val_start"])
+        else:
+            base = line_indent(text, mcp_start) + "  "
+        servers_obj = '{\n' + base + '  \n' + base + '}'
+        ins = mcp_start + 1
+        if members:
+            body = "\n" + base + '"servers": ' + servers_obj + ","
+            # re-parse after conceptual insert not needed; compute positions directly
+            new_text = text[:ins] + body + text[ins:]
+            # localizar servers recién insertado
+            sc2 = Scanner(new_text)
+            mcp2 = find_top_mcp(new_text, "mcp")
+            assert mcp2
+            s2 = find_key(sc2, mcp2[0], mcp2[1], "servers")
+            assert s2
+            return s2["val_start"], sc2.matching(s2["val_start"], len(new_text), "{", "}")
+        body = "\n" + base + '"servers": ' + servers_obj + "\n" + line_indent(text, mcp_start)
+        new_text = text[:ins] + body + text[ins:]
+        sc2 = Scanner(new_text)
+        mcp2 = find_top_mcp(new_text, "mcp")
+        assert mcp2
+        s2 = find_key(sc2, mcp2[0], mcp2[1], "servers")
+        assert s2
+        return s2["val_start"], sc2.matching(s2["val_start"], len(new_text), "{", "}")
+    # servers existe pero no es objeto: caer a mcp legacy
+    return mcp_start, mcp_end
 
+
+def edit(text: str, python_path: str) -> str:
+    # asegurar que si hace falta crear servers, trabajamos sobre el texto actualizado
+    sc = Scanner(text)
+    found = find_top_mcp(text, "mcp")
+    if found is None:
+        raise ValueError('el config no tiene una sección "mcp"')
+    mcp_start, mcp_end, _ = found
+    servers = find_key(sc, mcp_start, mcp_end, "servers")
+    if servers is None and find_key(sc, mcp_start, mcp_end, "nexuris") is None:
+        # crear servers dentro de mcp
+        members = sc.members(mcp_start, mcp_end)
+        if members:
+            base = line_indent(text, members[0]["val_start"])
+            indent = base + "  "
+            entry = f'"nexuris": {build_entry(indent, python_path)}'
+            servers_obj = '{\n' + base + "  " + entry + "\n" + base + "}"
+            ins = mcp_start + 1
+            body = "\n" + base + '"servers": ' + servers_obj + ","
+            return text[:ins] + body + text[ins:]
+        base = line_indent(text, mcp_start)
+        indent = base + "    "
+        entry = f'"nexuris": {build_entry(indent, python_path)}'
+        servers_obj = '{\n' + base + "  " + entry + "\n" + base + "  }"
+        ins = mcp_start + 1
+        body = "\n" + base + '  "servers": ' + servers_obj + "\n" + base
+        return text[:ins] + body + text[ins:]
+
+    # determinar contenedor final (puede ser servers o mcp legacy)
+    if servers and text[servers["val_start"]] == "{":
+        cont_start = servers["val_start"]
+        cont_end = sc.matching(cont_start, len(text), "{", "}")
+    else:
+        cont_start, cont_end = mcp_start, mcp_end
+
+    existing = find_key(sc, cont_start, cont_end, "nexuris")
     if existing:
         indent = line_indent(text, existing["val_start"])
         entry = build_entry(indent, python_path)
         return text[: existing["val_start"]] + entry + text[existing["val_end"] :]
 
-    # insertar como primer miembro
-    members = sc.members(mcp_start, mcp_end)
+    members = sc.members(cont_start, cont_end)
     if members:
-        indent = line_indent(text, members[0]["val_start"])
         base = line_indent(text, members[0]["val_start"])
+        indent = base
     else:
-        base = line_indent(text, mcp_start)
+        base = line_indent(text, cont_start)
         indent = base + "  "
     entry = f'"nexuris": {build_entry(indent, python_path)}'
-    ins = mcp_start + 1
+    ins = cont_start + 1
     if members:
         body = "\n" + base + entry + ","
         return text[:ins] + body + text[ins:]
     body = "\n" + indent + entry + "\n" + base
     return text[:ins] + body + text[ins:]
+
+
+def _remove_from_container(text: str, cont_start: int, cont_end: int) -> str | None:
+    sc = Scanner(text)
+    members = sc.members(cont_start, cont_end)
+    idx = next((k for k, m in enumerate(members) if m["key"] == "nexuris"), None)
+    if idx is None:
+        return None
+    target = members[idx]
+    start = text.rfind("\n", cont_start, target["val_start"]) + 1
+    if idx + 1 < len(members):
+        end = text.rfind("\n", cont_start, members[idx + 1]["val_start"]) + 1
+        return text[:start] + text[end:]
+    end = text.rfind("\n", 0, cont_end - 1) + 1
+    prev = text[:start]
+    prev = re.sub(r",[ \t]*\n[ \t]*$", "\n", prev)
+    return prev + text[end:]
 
 
 def remove(text: str) -> str:
@@ -222,24 +308,16 @@ def remove(text: str) -> str:
         return text
     mcp_start, mcp_end, _ = found
     sc = Scanner(text)
-    members = sc.members(mcp_start, mcp_end)
-    idx = next((k for k, m in enumerate(members) if m["key"] == "nexuris"), None)
-    if idx is None:
-        return text
-
-    target = members[idx]
-    # límites: desde el inicio de la línea del miembro hasta el inicio del siguiente
-    start = text.rfind("\n", mcp_start, target["val_start"]) + 1
-    if idx + 1 < len(members):
-        end = text.rfind("\n", mcp_start, members[idx + 1]["val_start"]) + 1
-    else:
-        # último miembro: buscar la llave de cierre del objeto mcp
-        end = text.rfind("\n", 0, mcp_end - 1) + 1
-        # si queda una coma colgando en el miembro anterior, la quitamos
-        prev = text[:start]
-        prev = re.sub(r",[ \t]*\n[ \t]*$", "\n", prev)
-        return prev + text[end:]
-    return text[:start] + text[end:]
+    # intentar en mcp.servers (V2) y en mcp (legacy)
+    servers = find_key(sc, mcp_start, mcp_end, "servers")
+    if servers and text[servers["val_start"]] == "{":
+        s_start = servers["val_start"]
+        s_end = sc.matching(s_start, len(text), "{", "}")
+        out = _remove_from_container(text, s_start, s_end)
+        if out is not None:
+            return out
+    out = _remove_from_container(text, mcp_start, mcp_end)
+    return out if out is not None else text
 
 
 def strip_jsonc(text: str) -> str:

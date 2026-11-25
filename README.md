@@ -37,6 +37,21 @@ nexuris/
 └── mcp_server.py      # servidor MCP (para opencode u otro cliente)
 ```
 
+## Estado actual: cerebro delegado en opencode
+
+La CLI ya no corre el loop ReAct local: cada turno va a una sesión de
+opencode con `agent=nexuris` (`nexuris/cloud_session.py`), usando
+`nexuris/core/opencode_backend.py` para crear la sesión, sincronizar la
+memoria como *instruction entries* y ejecutar cada turno. El modelo por
+defecto es `opencode/mimo-v2.6-flash-free`, elegido porque respeta esas
+entries; modelos como `big-pickle` las ignoran.
+
+`codex_proxy.py` expone un bridge OpenAI-compatible en `:4205` para usar
+Nexuris como modelo de Codex CLI (`codex`, o `codex --profile nexuris`).
+
+El loop standalone y el cliente OpenRouter siguen en el repo como alternativa,
+pero la CLI instalada usa el modo delegado.
+
 ## Instalación
 
 ### Un comando (recomendado)

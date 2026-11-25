@@ -37,15 +37,25 @@ class LLMClient:
 
     def __init__(self, config: LLMConfig | None = None) -> None:
         self.config = config or CONFIG.llm
-        if not self.config.api_key:
-            raise RuntimeError(
-                "No hay API key de OpenRouter. "
-                "Setea NEXO_OPENROUTER_KEY o OPENROUTER_API_KEY."
+        self._client: OpenAI | None = None
+        if self.config.api_key:
+            self._client = OpenAI(
+                base_url=self.config.base_url,
+                api_key=self.config.api_key,
             )
-        self._client = OpenAI(
-            base_url=self.config.base_url,
-            api_key=self.config.api_key,
-        )
+
+    def _ensure_client(self) -> OpenAI:
+        if self._client is None:
+            if not self.config.api_key:
+                raise RuntimeError(
+                    "No hay API key de OpenRouter. "
+                    "Setea NEXO_OPENROUTER_KEY o OPENROUTER_API_KEY."
+                )
+            self._client = OpenAI(
+                base_url=self.config.base_url,
+                api_key=self.config.api_key,
+            )
+        return self._client
 
     @staticmethod
     def _model_missing(exc: Exception) -> bool:
@@ -69,8 +79,9 @@ class LLMClient:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
 
+        client = self._ensure_client()
         try:
-            resp = self._client.chat.completions.create(**kwargs)
+            resp = client.chat.completions.create(**kwargs)
         except Exception as exc:  # noqa: BLE001
             # OpenRouter retira slugs de modelos: si el configurado murió,
             # caemos al router gratuito una sola vez y lo dejamos fijado.
@@ -78,7 +89,7 @@ class LLMClient:
                 raise
             self.config.model = FALLBACK_MODEL
             kwargs["model"] = FALLBACK_MODEL
-            resp = self._client.chat.completions.create(**kwargs)
+            resp = client.chat.completions.create(**kwargs)
 
         choice = resp.choices[0]
         msg = choice.message

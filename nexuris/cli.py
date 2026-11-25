@@ -1,12 +1,16 @@
-"""Nexo 2.0 — CLI interactiva.
+"""Nexo 2.0 — CLI interactiva (cerebro delegado en opencode).
 
-Charlá con Nexo desde la terminal. Comandos:
+Charlá con Nexuris desde la terminal. Los turnos van a una sesión de
+opencode con agent=nexuris — mismo modelo, persona y tools que la sesión
+interactiva — y la memoria local se inyecta como instruction entries.
+
+Comandos:
   /salir     cierra la sesión y consolida la memoria (sleep-time)
   /feedback  registra feedback sobre la última respuesta (bien/mal)
   /bloques   muestra los bloques de memoria
   /hechos    muestra los últimos hechos guardados
+  /modelo    cambia el modelo (provider/model de opencode) y lo recuerda
   /ayuda     muestra esta ayuda
-  /modelo    cambia el modelo (string de OpenRouter) y lo recuerda
 
 Fuera de la charla:
   nexuris update        actualiza repo, dependencias, modelo y tests
@@ -20,12 +24,12 @@ from pathlib import Path
 # asegura que el paquete sea importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from nexuris.bootstrap import build_agent
-from nexuris.core.config import CONFIG, save_user_config
+from nexuris.cloud_session import CloudSession
+from nexuris.core.config import save_user_config
+from nexuris.core.opencode_backend import OpenCodeError, OpenCodeUnavailable
 from nexuris.learn.feedback import FeedbackKind
-from nexuris.memory.blocks import BLOCKS, BlockLabel
+from nexuris.memory.blocks import BLOCKS
 from nexuris.memory.store import STORE
-from nexuris.session import Session
 
 
 def _print_blocks() -> None:
@@ -57,20 +61,19 @@ def main() -> None:
 
     print("=" * 55)
     print("  NEXO 2.0 — aprendizaje sin guion")
-    print(f"  cerebro: {CONFIG.llm.model}")
+    print("  cerebro: opencode (delegado)")
     print("=" * 55)
     print("Escribí para charlar. /ayuda para comandos.\n")
 
-    agent = build_agent()
-    session = Session(agent)
-
-    # confirmación para tools ASK
-    def confirm(name, args):
-        print(f"\n  [permiso] Nexo quiere usar '{name}'({args})")
-        resp = input("  ¿Permitir? [s/N] ").strip().lower()
-        return resp in ("s", "si", "y", "yes")
-
-    agent.confirm = confirm
+    try:
+        session = CloudSession()
+    except OpenCodeUnavailable as e:
+        print(f"  [error] {e}\n")
+        return
+    except OpenCodeError as e:
+        print(f"  [error] no pude crear la sesión: {e}\n")
+        return
+    print(f"  sesión: {session.session_id}  modelo: {session.model}\n")
 
     while True:
         try:
@@ -93,6 +96,9 @@ def main() -> None:
                     print(f"  facts: {len(result.facts)} nuevos")
                     if result.style_notes:
                         print(f"  estilo: {result.style_notes[:120]}")
+                elif getattr(session, "pending_saved", False):
+                    print("  (rate limit de modelos gratis — el sueño queda")
+                    print("   pendiente y se consolida en el próximo arranque)")
                 print("Chau. La memoria quedó guardada.\n")
                 break
             elif cmd == "/feedback":
@@ -116,12 +122,14 @@ def main() -> None:
                 _print_facts()
             elif cmd == "/modelo":
                 if arg:
-                    CONFIG.llm.model = arg
-                    agent.llm.config.model = arg
-                    save_user_config(model=arg)
-                    print(f"  Modelo cambiado a: {arg} (guardado en config)")
+                    try:
+                        new_model = session.set_model(arg)
+                        save_user_config(model=new_model)
+                        print(f"  Modelo cambiado a: {new_model} (guardado en config)")
+                    except OpenCodeError as e:
+                        print(f"  [error] {e}")
                 else:
-                    print(f"  Modelo actual: {CONFIG.llm.model}")
+                    print(f"  Modelo actual: {session.model}")
             elif cmd == "/ayuda":
                 print(__doc__)
             else:
@@ -132,6 +140,8 @@ def main() -> None:
         try:
             reply = session.ask(user_input)
             print(f"nexuris> {reply}\n")
+        except OpenCodeError as e:
+            print(f"  [error] {e}\n")
         except Exception as e:
             print(f"  [error] {type(e).__name__}: {e}\n")
 

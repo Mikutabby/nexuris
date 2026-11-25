@@ -19,8 +19,6 @@ from pathlib import Path
 # asegura importabilidad
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from nexuris.bootstrap import build_agent
-from nexuris.core.config import CONFIG
 from nexuris.memory.blocks import BLOCKS, BlockLabel
 from nexuris.memory.store import STORE
 from nexuris.tools.registry import REGISTRY
@@ -123,8 +121,21 @@ def _handle(req: dict) -> dict | None:
     return None
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     """Loop stdio de MCP: lee JSON-RPC por stdin, responde por stdout."""
+    import argparse
+
+    ap = argparse.ArgumentParser(
+        prog="nexuris-mcp",
+        description="Servidor MCP de Nexuris (transporte stdio JSON-RPC 2.0).",
+    )
+    ap.add_argument(
+        "--version",
+        action="version",
+        version="nexuris-mcp 2.0.0",
+    )
+    ap.parse_args(argv)
+
     # precarga tools (el decorador las registra al importar)
     from nexuris.tools import core as _core  # noqa: F401
     from nexuris.tools import memory_tools as _mem  # noqa: F401
